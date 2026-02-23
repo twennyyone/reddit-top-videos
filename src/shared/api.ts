@@ -16,3 +16,21 @@ export type DecrementResponse = {
   postId: string;
   count: number;
 };
+
+export type VideoPost = {
+  id: string;
+  title: string;
+  author: string;
+  score: number;
+  permalink: string;
+  thumbnailUrl: string | null;
+  videoUrl: string | null;
+  createdAt: number;
+  rank: number;
+};
+
+export type TopVideosResponse = {
+  type: 'topVideos';
+  videos: VideoPost[];
+  cachedAt: number;
+};

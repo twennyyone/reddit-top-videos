@@ -1,72 +1,164 @@
 import './index.css';
 
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { navigateTo } from '@devvit/web/client';
-import { useCounter } from './hooks/useCounter';
+import type { TopVideosResponse, VideoPost } from '../shared/api';
+
+const RANK_COLORS: Record<number, string> = {
+  1: 'bg-yellow-400 text-yellow-900',
+  2: 'bg-gray-300 text-gray-800',
+  3: 'bg-amber-600 text-amber-100',
+};
+
+const formatRelativeTime = (timestampMs: number): string => {
+  const diff = Date.now() - timestampMs;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ago`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  if (minutes > 0) return `${minutes} min${minutes !== 1 ? 's' : ''} ago`;
+  return 'just now';
+};
+
+const formatScore = (score: number): string => {
+  if (score >= 1_000_000) return `${(score / 1_000_000).toFixed(1)}M`;
+  if (score >= 1000) return `${(score / 1000).toFixed(1)}k`;
+  return String(score);
+};
+
+type VideoCardProps = {
+  video: VideoPost;
+};
+
+const VideoCard = ({ video }: VideoCardProps) => {
+  const rankStyle =
+    RANK_COLORS[video.rank] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+  const isTop = video.rank === 1;
+
+  return (
+    <div
+      className={`flex gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 shadow-sm border ${
+        isTop
+          ? 'border-yellow-300 dark:border-yellow-600'
+          : 'border-gray-100 dark:border-gray-700'
+      }`}
+    >
+      <div className="flex-shrink-0 flex flex-col items-center gap-1">
+        <span
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${rankStyle}`}
+        >
+          {video.rank}
+        </span>
+      </div>
+      <div className="flex-1 min-w-0 flex gap-3">
+        {video.thumbnailUrl && (
+          <div className="flex-shrink-0">
+            <img
+              src={video.thumbnailUrl}
+              alt=""
+              className="w-16 h-16 object-cover rounded-lg bg-gray-200 dark:bg-gray-700"
+            />
+          </div>
+        )}
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <button
+            className="text-sm font-medium text-gray-900 dark:text-white text-left truncate hover:text-[#d93900] dark:hover:text-orange-400 transition-colors cursor-pointer"
+            onClick={() =>
+              navigateTo(`https://www.reddit.com${video.permalink}`)
+            }
+            title={video.title}
+          >
+            {video.title}
+          </button>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            u/{video.author}
+          </p>
+          <div className="flex items-center gap-3 mt-auto">
+            <span className="flex items-center gap-1 text-xs font-medium text-[#d93900] dark:text-orange-400">
+              ▲ {formatScore(video.score)}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {formatRelativeTime(video.createdAt)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const App = () => {
-  const { count, username, loading, increment, decrement } = useCounter();
+  const [videos, setVideos] = useState<VideoPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        const res = await fetch('/api/top-videos');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: TopVideosResponse = await res.json();
+        setVideos(data.videos);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load videos');
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchVideos();
+  }, []);
+
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100">
-          {username ? `Hey ${username} 👋` : ''}
-        </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/game.tsx
-          </span>{' '}
-          to get started.
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="max-w-lg mx-auto flex flex-col gap-4">
+        <div className="flex items-center gap-2 pt-2">
+          <span className="text-2xl">��</span>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+            Top 5 Videos This Week
+          </h1>
+        </div>
+
+        {loading && (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-24 rounded-xl bg-white dark:bg-gray-800 shadow-sm animate-pulse"
+              />
+            ))}
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-center">
+            <p className="text-sm text-red-600 dark:text-red-400">
+              ⚠️ {error}
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && videos.length === 0 && (
+          <div className="p-8 rounded-xl bg-white dark:bg-gray-800 shadow-sm text-center">
+            <p className="text-4xl mb-3">📭</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              No video posts found this week
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Check back later when videos are posted!
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && videos.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {videos.map((video) => (
+              <VideoCard key={video.id} video={video} />
+            ))}
+          </div>
+        )}
       </div>
-      <div className="flex items-center justify-center mt-5">
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-14 h-14 text-[2.5em] rounded-full cursor-pointer font-mono leading-none transition-colors hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={decrement}
-          disabled={loading}
-        >
-          -
-        </button>
-        <span className="text-[1.8em] font-medium mx-5 min-w-[50px] text-center leading-none text-gray-900 dark:text-white">
-          {loading ? '...' : count}
-        </span>
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-14 h-14 text-[2.5em] rounded-full cursor-pointer font-mono leading-none transition-colors hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={increment}
-          disabled={loading}
-        >
-          +
-        </button>
-      </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://developers.reddit.com/docs')}
-        >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
-        </button>
-      </footer>
     </div>
   );
 };
